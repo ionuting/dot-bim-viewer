@@ -1,0 +1,1625 @@
+<!-- templates/viewer.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Geometry Viewer</title>
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: #ffffff;
+        }
+        
+        #app-container {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            height: 100vh;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        #properties-panel {
+            background: #252526;
+            border-right: 1px solid #404040;
+            overflow-y: auto;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+
+        .panel-header {
+            padding: 15px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffffff;
+            background: #1e1e1e;
+            border-bottom: 1px solid #404040;
+        }
+
+        .panel-section {
+            margin: 15px 0;
+            padding: 15px;
+            background: #2d2d2d;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #89d0ff;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #404040;
+        }
+
+        .property-item {
+            margin-bottom: 8px;
+            padding: 8px;
+            background: #333333;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .property-item:hover {
+            background: #404040;
+        }
+
+        .property-label {
+            font-size: 12px;
+            color: #4ec9b0;
+            margin-bottom: 4px;
+        }
+
+        .property-value {
+            font-size: 12px;
+            color: #d4d4d4;
+            word-break: break-word;
+        }
+
+        #viewer-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            background: linear-gradient(to bottom, #2d2d2d, #1e1e1e);
+        }
+
+        .file-controls {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .file-button {
+            display: inline-block;
+            background: rgba(28, 28, 35, 0.95);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .file-button:hover {
+            background: rgba(40, 40, 50, 0.95);
+            transform: translateY(-1px);
+        }
+
+        #loading-progress {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(28, 28, 35, 0.95);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            z-index: 1000;
+            display: none;
+        }
+
+        .selected-highlight {
+            outline: 2px solid #4ec9b0;
+        }
+
+        .object-list-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background: #333333;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .object-list-item:hover {
+            background: #404040;
+        }
+
+        .object-checkbox {
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .object-name {
+            flex-grow: 1;
+            font-size: 12px;
+            color: #d4d4d4;
+        }
+
+        .object-list-item.selected {
+            border-left: 3px solid #4ec9b0;
+            padding-left: 5px;
+        }
+
+        #analytics-panel {
+            background: #252526;
+            border-left: 1px solid #404040;
+            overflow-y: auto;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+
+        #properties-panel, #analytics-panel {
+            scrollbar-width: thin;
+            scrollbar-color: #404040 #252526;
+        }
+
+        #properties-panel::-webkit-scrollbar,
+        #analytics-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #properties-panel::-webkit-scrollbar-track,
+        #analytics-panel::-webkit-scrollbar-track {
+            background: #252526;
+        }
+
+        #properties-panel::-webkit-scrollbar-thumb,
+        #analytics-panel::-webkit-scrollbar-thumb {
+            background-color: #404040;
+            border-radius: 4px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+        }
+
+        .modal-content {
+            background-color: #252526;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #404040;
+            width: 80%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border-radius: 8px;
+        }
+
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-button:hover {
+            color: #fff;
+        }
+
+        .chart-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .object-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            border: 1px solid #4ec9b0;
+            display: none;
+        }
+
+        .object-label .label-title {
+            color: #4ec9b0;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .object-label .label-property {
+            margin: 2px 0;
+            color: #d4d4d4;
+        }
+
+        .reports-window {
+            background: #1e1e1e;
+            color: #ffffff;
+            padding: 20px;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .reports-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: #252526;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .reports-table th, .reports-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #404040;
+        }
+
+        .reports-table th {
+            background: #333333;
+            color: #4ec9b0;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .reports-table tr:hover {
+            background: #2d2d2d;
+        }
+
+        .reports-table td {
+            color: #d4d4d4;
+        }
+
+        .reports-search {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 20px;
+            background: #333333;
+            border: 1px solid #404040;
+            color: #ffffff;
+            border-radius: 4px;
+        }
+
+        .open-csv-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 20px 0;
+            display: inline-block;
+        }
+
+        .open-csv-button:hover {
+            background-color: #0056b3;
+        }
+
+        .load-metadata-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 20px 0;
+            display: inline-block;
+        }
+
+        .load-metadata-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="file-controls">
+        <label class="file-button">
+            <input type="file" id="file-input" accept=".bim" style="display: none;">
+            Load BIM Model
+        </label>
+        <button class="file-button" onclick="showObjectsTable()">
+            Show Table
+        </button>
+        <button class="file-button" onclick="openCsvViewer()">
+            Open CSV Viewer
+        </button>
+    </div>
+
+    <div id="app-container">
+        <div id="properties-panel">
+            <div class="panel-header">Properties</div>
+            <div class="panel-section">
+                <div class="section-title">Selected Object</div>
+                <div id="selected-info" class="properties-list"></div>
+            </div>
+            <div class="panel-section">
+                <div class="section-title">Materials</div>
+                <div id="material-info" class="properties-list"></div>
+            </div>
+            <div class="panel-section">
+                <div class="section-title">Custom Properties</div>
+                <div id="custom-props" class="properties-list"></div>
+            </div>
+            <div class="panel-section">
+                <div class="section-title">Scene Objects</div>
+                <div id="objects-list" class="properties-list"></div>
+            </div>
+        </div>
+
+        <div id="viewer-container"></div>
+
+        <div id="analytics-panel">
+            <div class="panel-header">Analytics</div>
+            
+            <div class="panel-section">
+                <div class="section-title">Geometry Stats</div>
+                <div id="geometry-stats" class="properties-list"></div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="section-title">Scene Metrics</div>
+                <div id="scene-metrics" class="properties-list"></div>
+            </div>
+            
+            <div class="panel-section">
+                <div class="section-title">Performance</div>
+                <div id="performance-stats" class="properties-list"></div>
+            </div>
+
+            <div class="data-visualization-container">
+                <div class="tables-container">
+                    <input type="file" id="csvFileInput" accept=".csv" multiple class="file-input">
+                    <div id="csvFileContainers"></div>
+                </div>
+                
+                <!-- Container dedicat pentru grafice Plotly -->
+                <div class="plotly-charts-container">
+                    <div id="plotlyChart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading-progress">Loading model...</div>
+
+    <!-- Scripts -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.159.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.159.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls, currentModel;
+        let selectedObject = null;
+        let lastFrameTime = performance.now();
+
+        // Adăugăm variabile globale pentru label
+        let labelDiv;
+        let labelVisible = false;
+
+        // Adăugăm după declararea variabilelor globale
+        let clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 100);
+        let clipPlaneEnabled = false;
+
+        // Adăugăm controale pentru clipping plane
+        const clipControls = `
+            <div class="panel-section">
+                <div class="section-title">Clipping Controls</div>
+                <div class="property-item">
+                    <label class="property-label">
+                        <input type="checkbox" id="clipPlaneToggle" onchange="toggleClipPlane()"> Enable Clipping
+                    </label>
+                </div>
+                <div class="property-item">
+                    <label class="property-label">Height</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="range" id="clipPlaneHeight" 
+                            min="-100" max="100" value="0" step="0.1"
+                            oninput="updateClipPlaneFromSlider(this.value)"
+                            style="flex: 1; background: #333333; border: none; color: #ffffff;">
+                        <input type="number" id="clipPlaneHeightInput"
+                            value="0" step="0.1"
+                            oninput="updateClipPlaneFromInput(this.value)"
+                            style="width: 80px; background: #333333; border: 1px solid #404040; color: #ffffff; padding: 4px; border-radius: 4px;">
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Adăugăm controalele în panoul de proprietăți
+        document.getElementById('properties-panel').insertAdjacentHTML('beforeend', clipControls);
+
+        // Facem handle3DModelUpload global
+        window.handle3DModelUpload = async function(event) {
+            const file = event.target.files[0];
+            if (!file || !file.name.toLowerCase().endsWith('.bim')) {
+                console.error('Please select a .bim file');
+                return;
+            }
+
+            const loadingProgress = document.getElementById('loading-progress');
+            loadingProgress.style.display = 'block';
+            loadingProgress.textContent = 'Loading model...';
+            
+            try {
+                const model = await loadBIMModel(file);
+                
+                if (currentModel) {
+                    scene.remove(currentModel);
+                }
+                currentModel = model;
+                
+                scene.add(model);
+                fitCameraToModel(model);
+                updateObjectsList();
+                updateGeometryStats();
+                updateSceneMetrics();
+                
+                loadingProgress.textContent = 'Model loaded successfully';
+            } catch (error) {
+                console.error('Error loading model:', error);
+                loadingProgress.textContent = 'Error loading model';
+            }
+            
+            setTimeout(() => {
+                loadingProgress.style.display = 'none';
+            }, 2000);
+        };
+
+        init();
+        animate();
+
+        /**
+         * Initializes the 3D scene and sets up all necessary components
+         */
+        function init() {
+            // Create scene and set background
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xffffff);
+
+            // Setup perspective camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(5, 5, 5);
+            
+            // Initialize renderer with antialiasing and transparency
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true,
+                alpha: true 
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            const container = document.getElementById('viewer-container');
+            if (container) {
+                container.appendChild(renderer.domElement);
+            }
+
+            // Grid Helper
+            const size = 20;
+            const divisions = 20;
+            const gridHelper = new THREE.GridHelper(size, divisions, 0x888888, 0xcccccc);
+            scene.add(gridHelper);
+
+            // Lumini
+            const sceneLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(sceneLight);
+            
+            const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            mainLight.position.set(5, 10, 5);
+            mainLight.castShadow = true;
+            mainLight.shadow.mapSize.width = 2048;
+            mainLight.shadow.mapSize.height = 2048;
+            scene.add(mainLight);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 1;
+            controls.maxDistance = 50;
+            controls.maxPolarAngle = Math.PI / 2;
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize, false);
+            renderer.domElement.addEventListener('click', onModelClick, false);
+            document.getElementById('file-input').addEventListener('change', handle3DModelUpload);
+
+            labelDiv = document.getElementById('object-label');
+            
+            // Adăugăm event listener pentru mișcarea mouse-ului
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            renderer.domElement.addEventListener('mouseout', () => {
+                if (!selectedObject) {
+                    labelDiv.style.display = 'none';
+                }
+            });
+
+            window.showCharts = showCharts;
+
+            // Modificăm funcția de inițializare a renderer-ului
+            renderer.localClippingEnabled = true;
+        }
+
+        /**
+         * Handles the loading of BIM models from file
+         * @param {File} file - The uploaded .bim file
+         * @returns {Promise<THREE.Group>} The loaded 3D model
+         */
+        async function loadBIMModel(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const bimData = JSON.parse(event.target.result);
+                        
+                        // Creăm geometria din datele BIM
+                        const model = new THREE.Group();
+                        
+                        // Procesăm mesh-urile
+                        bimData.meshes.forEach((meshData, meshIndex) => {
+                            // Creăm geometria
+                            const geometry = new THREE.BufferGeometry();
+                            
+                            // Convertim coordonatele din sistemul Blender în Three.js
+                            const vertices = new Float32Array(meshData.coordinates.length);
+                            for (let i = 0; i < meshData.coordinates.length; i += 3) {
+                                // Coordonatele în Blender: (X, Y, Z)
+                                // Coordonatele în Three.js: (X, Z, -Y)
+                                vertices[i] = meshData.coordinates[i];       // X rămâne X
+                                vertices[i + 1] = meshData.coordinates[i + 2]; // Y devine Z
+                                vertices[i + 2] = -meshData.coordinates[i + 1]; // Z devine -Y
+                            }
+                            
+                            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+                            
+                            // Setăm indicii pentru fețe
+                            if (meshData.indices) {
+                                geometry.setIndex(meshData.indices);
+                            }
+                            
+                            // Calculăm normalele
+                            geometry.computeVertexNormals();
+                            
+                            // Găsim elementele care folosesc acest mesh
+                            const elements = bimData.elements.filter(el => el.mesh_id === meshIndex);
+                            
+                            elements.forEach(element => {
+                                // Parsăm proprietățile materialului din string JSON
+                                let materialProps = {};
+                                if (element.info.material) {
+                                    try {
+                                        materialProps = JSON.parse(element.info.material);
+                                    } catch (e) {
+                                        console.warn('Could not parse material properties:', e);
+                                    }
+                                }
+
+                                // Creăm materialul cu setările din info.material
+                                const material = new THREE.MeshPhongMaterial({
+                                    color: materialProps.color ? new THREE.Color(
+                                        materialProps.color[0],
+                                        materialProps.color[1],
+                                        materialProps.color[2]
+                                    ) : new THREE.Color(
+                                        element.color.r / 255,
+                                        element.color.g / 255,
+                                        element.color.b / 255
+                                    ),
+                                    opacity: materialProps.alpha !== undefined ? materialProps.alpha : element.color.a / 255,
+                                    transparent: materialProps.alpha !== undefined ? materialProps.alpha < 1 : element.color.a < 255,
+                                    side: THREE.DoubleSide,
+                                    metalness: materialProps.metallic !== undefined ? materialProps.metallic : 0,
+                                    roughness: materialProps.roughness !== undefined ? materialProps.roughness : 0.5
+                                });
+
+                                // Setăm numele materialului
+                                if (materialProps.name) {
+                                    material.name = materialProps.name;
+                                }
+
+                                // Creăm mesh-ul
+                                const mesh = new THREE.Mesh(geometry, material);
+                                
+                                // Convertim pozițiile din Blender în Three.js
+                                if (element.vector) {
+                                    mesh.position.set(
+                                        element.vector.x,
+                                        element.vector.z,
+                                        -element.vector.y
+                                    );
+                                }
+                                
+                                // Convertim rotațiile din Blender în Three.js
+                                if (element.rotation) {
+                                    // Creăm un quaternion nou cu coordonatele convertite
+                                    const quat = new THREE.Quaternion(
+                                        element.rotation.qx,
+                                        element.rotation.qz,
+                                        -element.rotation.qy,
+                                        element.rotation.qw
+                                    );
+                                    mesh.setRotationFromQuaternion(quat);
+                                }
+                                
+                                // Setăm numele și proprietățile
+                                mesh.name = element.info.Name || `Element_${element.guid}`;
+                                mesh.userData = {
+                                    info: element.info,
+                                    guid: element.guid,
+                                    type: element.type,
+                                    mesh_id: element.mesh_id,
+                                    color: element.color,
+                                    vector: element.vector,
+                                    rotation: element.rotation
+                                };
+                                
+                                model.add(mesh);
+                            });
+                        });
+                        
+                        resolve(model);
+                        
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        // Funcții pentru interacțiune
+        function onModelClick(event) {
+            event.preventDefault();
+            
+            const rect = renderer.domElement.getBoundingClientRect();
+            const mouse = new THREE.Vector2();
+            
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+            
+            if (currentModel) {
+                const intersects = raycaster.intersectObjects(currentModel.children, true);
+                if (intersects.length > 0) {
+                    selectObject(intersects[0].object);
+                } else {
+                    // Deselectăm obiectul curent dacă facem click în gol
+                    if (selectedObject) {
+                        selectedObject.material.emissive.setHex(0x000000);
+                        selectedObject = null;
+                        labelDiv.style.display = 'none';
+                        labelVisible = false;
+                    }
+                }
+            }
+        }
+
+        function selectObject(object) {
+            if (selectedObject) {
+                selectedObject.material.emissive.setHex(0x000000);
+            }
+
+            selectedObject = object;
+            selectedObject.material.emissive.setHex(0x333333);
+            
+            updateLabel(object);
+            updateLabelPosition(object);
+            updatePropertiesForSelection(object);
+            updateObjectsList();
+        }
+
+        // Funcții de actualizare UI
+        function updatePropertiesForSelection(object) {
+            const selectedInfo = document.getElementById('selected-info');
+            const materialInfo = document.getElementById('material-info');
+            const customProps = document.getElementById('custom-props');
+            
+            selectedInfo.innerHTML = '';
+            materialInfo.innerHTML = '';
+            customProps.innerHTML = '';
+            
+            // Informații de bază
+            addPropertyItem(selectedInfo, 'Name', object.name);
+            addPropertyItem(selectedInfo, 'Type', object.type);
+            
+            // Pentru obiecte BIM, afișăm toate proprietățile
+            if (object.userData) {
+                // Afișăm GUID în secțiunea de informații
+                if (object.userData.guid) {
+                    addPropertyItem(selectedInfo, 'GUID', object.userData.guid);
+                }
+                
+                // Afișăm toate proprietățile din info în panoul custom
+                if (object.userData.info) {
+                    Object.entries(object.userData.info).forEach(([key, value]) => {
+                        addPropertyItem(customProps, key, value);
+                    });
+                }
+            }
+        }
+
+        function addPropertyItem(container, label, value) {
+            const item = document.createElement('div');
+            item.className = 'property-item';
+            
+            const labelElement = document.createElement('div');
+            labelElement.className = 'property-label';
+            labelElement.textContent = label;
+            
+            const valueElement = document.createElement('div');
+            valueElement.className = 'property-value';
+            valueElement.textContent = value;
+            
+            item.appendChild(labelElement);
+            item.appendChild(valueElement);
+            container.appendChild(item);
+        }
+
+        // Funcții de utilitate
+        function onWindowResize() {
+            const containerWidth = document.getElementById('viewer-container').clientWidth;
+            const containerHeight = document.getElementById('viewer-container').clientHeight;
+            const aspect = containerWidth / containerHeight;
+            const viewSize = 10;
+            
+            // Ajustăm camera pentru a păstra proporțiile corecte
+            if (aspect > 1) {
+                camera.left = -viewSize * aspect;
+                camera.right = viewSize * aspect;
+                camera.top = viewSize;
+                camera.bottom = -viewSize;
+            } else {
+                camera.left = -viewSize;
+                camera.right = viewSize;
+                camera.top = viewSize / aspect;
+                camera.bottom = -viewSize / aspect;
+            }
+            
+            camera.updateProjectionMatrix();
+            renderer.setSize(containerWidth, containerHeight);
+        }
+
+        function fitCameraToModel(model) {
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const viewSize = maxDim * 1.2;
+            
+            // Folosim dimensiunile containerului în loc de window
+            const containerWidth = document.getElementById('viewer-container').clientWidth;
+            const containerHeight = document.getElementById('viewer-container').clientHeight;
+            const aspect = containerWidth / containerHeight;
+            
+            // Ajustăm camera pentru a păstra proporțiile corecte
+            if (aspect > 1) {
+                camera.left = -viewSize * aspect;
+                camera.right = viewSize * aspect;
+                camera.top = viewSize;
+                camera.bottom = -viewSize;
+            } else {
+                camera.left = -viewSize;
+                camera.right = viewSize;
+                camera.top = viewSize / aspect;
+                camera.bottom = -viewSize / aspect;
+            }
+            
+            // Calculăm distanța și poziția pentru vedere arhitecturală
+            const distance = maxDim * 2;
+            camera.position.set(
+                distance * Math.cos(Math.PI / 6) * Math.cos(Math.PI / 6),
+                distance * Math.sin(Math.PI / 6),
+                distance * Math.cos(Math.PI / 6) * Math.sin(Math.PI / 6)
+            );
+            
+            camera.lookAt(center);
+            camera.updateProjectionMatrix();
+            
+            controls.target.copy(center);
+            controls.update();
+        }
+
+        /**
+         * Updates the scene on each animation frame
+         */
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            
+            // Update label position for selected object
+            if (selectedObject) {
+                updateLabelPosition(selectedObject);
+            }
+            
+            renderer.render(scene, camera);
+            updatePerformanceStats();
+        }
+
+        // Adăugăm funcțiile pentru statistici
+        function updateGeometryStats() {
+            const statsDiv = document.getElementById('geometry-stats');
+            statsDiv.innerHTML = '';
+
+            if (!currentModel) return;
+
+            let totalVertices = 0;
+            let totalFaces = 0;
+            let totalObjects = 0;
+            let totalMaterials = new Set();
+
+            currentModel.traverse((object) => {
+                if (object.geometry) {
+                    if (object.geometry.attributes.position) {
+                        totalVertices += object.geometry.attributes.position.count;
+                    }
+                    if (object.geometry.index) {
+                        totalFaces += object.geometry.index.count / 3;
+                    }
+                }
+                if (object.material) {
+                    if (Array.isArray(object.material)) {
+                        object.material.forEach(mat => totalMaterials.add(mat));
+                    } else {
+                        totalMaterials.add(object.material);
+                    }
+                }
+                if (object.type === 'Mesh') totalObjects++;
+            });
+
+            addPropertyItem(statsDiv, 'Total Vertices', totalVertices.toLocaleString());
+            addPropertyItem(statsDiv, 'Total Faces', totalFaces.toLocaleString());
+            addPropertyItem(statsDiv, 'Object Count', totalObjects.toLocaleString());
+            addPropertyItem(statsDiv, 'Material Count', totalMaterials.size);
+        }
+
+        function updateSceneMetrics() {
+            const metricsDiv = document.getElementById('scene-metrics');
+            metricsDiv.innerHTML = '';
+
+            if (!currentModel) return;
+
+            const box = new THREE.Box3().setFromObject(currentModel);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+
+            addPropertyItem(metricsDiv, 'Dimensions', 
+                `X: ${size.x.toFixed(2)}\nY: ${size.y.toFixed(2)}\nZ: ${size.z.toFixed(2)}`);
+            addPropertyItem(metricsDiv, 'Center Point',
+                `X: ${center.x.toFixed(2)}\nY: ${center.y.toFixed(2)}\nZ: ${center.z.toFixed(2)}`);
+        }
+
+        function updatePerformanceStats() {
+            const statsDiv = document.getElementById('performance-stats');
+            statsDiv.innerHTML = '';
+
+            // FPS - verificăm dacă lastFrameTime este definit
+            const currentTime = performance.now();
+            if (lastFrameTime) {
+                const fps = Math.round(1000 / (currentTime - lastFrameTime));
+                addPropertyItem(statsDiv, 'FPS', fps);
+            }
+            lastFrameTime = currentTime;
+            
+            // Restul statisticilor
+            addPropertyItem(statsDiv, 'Draw Calls', renderer.info.render.calls);
+            addPropertyItem(statsDiv, 'Triangles', renderer.info.render.triangles.toLocaleString());
+            
+            // Memory usage (dacă este disponibil)
+            if (performance.memory) {
+                const memoryUsage = Math.round(performance.memory.usedJSHeapSize / 1048576);
+                addPropertyItem(statsDiv, 'Memory', `${memoryUsage} MB`);
+            }
+        }
+
+        // Adăugăm funcția pentru actualizarea listei de obiecte
+        function updateObjectsList() {
+            const objectsList = document.getElementById('objects-list');
+            objectsList.innerHTML = '';
+
+            if (!currentModel) return;
+
+            currentModel.traverse((object) => {
+                if (object.type === 'Mesh') {
+                    const item = document.createElement('div');
+                    item.className = 'object-list-item';
+                    if (selectedObject === object) {
+                        item.classList.add('selected');
+                    }
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'object-checkbox';
+                    checkbox.checked = object.visible;
+                    checkbox.addEventListener('change', () => {
+                        object.visible = checkbox.checked;
+                    });
+
+                    const name = document.createElement('span');
+                    name.className = 'object-name';
+                    name.textContent = object.name;
+                    name.addEventListener('click', () => {
+                        selectObject(object);
+                    });
+
+                    item.appendChild(checkbox);
+                    item.appendChild(name);
+                    objectsList.appendChild(item);
+                }
+            });
+        }
+
+        // Funcție pentru actualizarea poziției label-ului
+        function updateLabelPosition(object) {
+            if (!labelVisible || !object) return;
+            
+            // Calculăm poziția în spațiul ecranului
+            const vector = new THREE.Vector3();
+            
+            // Obținem poziția centrului obiectului
+            object.geometry.computeBoundingBox();
+            object.geometry.boundingBox.getCenter(vector);
+            
+            // Transformăm poziția obiectului în coordonate mondiale
+            vector.applyMatrix4(object.matrixWorld);
+            
+            // Proiectăm poziția 3D în coordonate 2D ale ecranului
+            vector.project(camera);
+            
+            // Convertim coordonatele proiectate în pixeli
+            const x = (vector.x * 0.5 + 0.5) * renderer.domElement.clientWidth;
+            const y = (-vector.y * 0.5 + 0.5) * renderer.domElement.clientHeight;
+            
+            // Adăugăm offset pentru a poziționa eticheta deasupra obiectului
+            const labelRect = labelDiv.getBoundingClientRect();
+            const offsetY = 30; // pixeli deasupra obiectului
+            
+            // Obținem poziția containerului pentru a ajusta coordonatele
+            const container = renderer.domElement.getBoundingClientRect();
+            
+            // Setăm poziția etichetei
+            labelDiv.style.left = (container.left + x - labelRect.width/2) + 'px';
+            labelDiv.style.top = (container.top + y - labelRect.height - offsetY) + 'px';
+        }
+
+        // Funcție pentru actualizarea conținutului label-ului
+        function updateLabel(object) {
+            if (!object || !object.userData) return;
+            
+            const info = object.userData.info;
+            labelDiv.innerHTML = `
+                <div class="label-title">${object.name}</div>
+                <div class="label-property">Type: ${info.type || 'N/A'}</div>
+                <div class="label-property">Length: ${info.length || 'N/A'} m</div>
+                <div class="label-property">Width: ${info.width || 'N/A'} m</div>
+                <div class="label-property">Height: ${info.height || 'N/A'} m</div>
+                <div class="label-property">Area: ${info.area || 'N/A'} m²</div>
+                <div class="label-property">Volume: ${info.volume || 'N/A'} m³</div>
+            `;
+            labelDiv.style.display = 'block';
+            labelVisible = true;
+        }
+
+        // Funcție pentru gestionarea mișcării mouse-ului
+        function onMouseMove(event) {
+            event.preventDefault();
+            
+            const rect = renderer.domElement.getBoundingClientRect();
+            const mouse = new THREE.Vector2();
+            
+            // Calculăm poziția mouse-ului relativă la container
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+            
+            if (currentModel) {
+                const intersects = raycaster.intersectObjects(currentModel.children, true);
+                
+                // Resetăm toate obiectele la starea lor normală
+                currentModel.traverse((child) => {
+                    if (child.type === 'Mesh' && child !== selectedObject) {
+                        child.material.emissive.setHex(0x000000);
+                    }
+                });
+                
+                if (intersects.length > 0) {
+                    const object = intersects[0].object;
+                    
+                    // Evidențiem obiectul la hover doar dacă nu este deja selectat
+                    if (!selectedObject || selectedObject !== object) {
+                        object.material.emissive.setHex(0x222222);
+                    }
+                    
+                    // Actualizăm eticheta și poziția ei
+                    updateLabel(object);
+                    updateLabelPosition(object);
+                    
+                    // Schimbăm cursorul pentru a indica că obiectul poate fi selectat
+                    renderer.domElement.style.cursor = 'pointer';
+                } else {
+                    // Ascundem eticheta doar dacă nu avem un obiect selectat
+                    if (!selectedObject) {
+                        labelDiv.style.display = 'none';
+                        labelVisible = false;
+                    } else {
+                        // Dacă avem un obiect selectat, menținem eticheta vizibilă și actualizăm poziția
+                        updateLabelPosition(selectedObject);
+                    }
+                    renderer.domElement.style.cursor = 'default';
+                }
+            }
+        }
+
+        // Adăugăm funcția pentru afișarea graficelor
+        function showCharts() {
+            if (!currentModel) return;
+
+            // Colectăm datele
+            const volumeData = {};
+            const colorData = {};
+            
+            currentModel.traverse((object) => {
+                if (object.type === 'Mesh' && object.userData && object.userData.info) {
+                    const type = object.userData.info.type || 'Undefined';
+                    const volume = parseFloat(object.userData.info.volume) || 0;
+                    
+                    if (object.material && object.material.color) {
+                        const color = object.material.color;
+                        const hexColor = '#' + color.getHexString();
+                        if (!colorData[type]) {
+                            colorData[type] = hexColor;
+                        }
+                    }
+                    
+                    if (!volumeData[type]) {
+                        volumeData[type] = volume;
+                    } else {
+                        volumeData[type] += volume;
+                    }
+                }
+            });
+
+            // Pregătim datele pentru grafic - fiecare tip ca serie separată
+            const plotData = Object.keys(volumeData).map(type => ({
+                name: type,
+                x: [type],
+                y: [volumeData[type]],
+                type: 'bar',
+                marker: {
+                    color: colorData[type] || '#4ec9b0'
+                }
+            }));
+
+            const layout = {
+                title: 'Volume by Type',
+                font: { family: 'Segoe UI', color: '#ffffff' },
+                paper_bgcolor: '#252526',
+                plot_bgcolor: '#1e1e1e',
+                xaxis: {
+                    title: 'Type',
+                    gridcolor: '#404040',
+                    zerolinecolor: '#404040',
+                    showticklabels: true
+                },
+                yaxis: {
+                    title: 'Volume (m³)',
+                    gridcolor: '#404040',
+                    zerolinecolor: '#404040'
+                },
+                margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
+                barmode: 'group',
+                showlegend: false
+            };
+
+            const config = {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false,
+                modeBarButtonsToRemove: ['lasso2d', 'select2d']
+            };
+
+            // Deschidem fereastra și inițializăm graficul
+            const chartWindow = window.open('', '_blank', 'width=800,height=600');
+            chartWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Volume Analysis</title>
+                        <script src="https://cdn.plot.ly/plotly-latest.min.js"><\/script>
+                        <style>
+                            body {
+                                margin: 0;
+                                padding: 20px;
+                                background: #1e1e1e;
+                                font-family: 'Segoe UI', sans-serif;
+                            }
+                            #chart {
+                                width: 100%;
+                                height: calc(100vh - 40px);
+                                background: #252526;
+                                border-radius: 8px;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div id="chart"></div>
+                        <script>
+                            window.onload = function() {
+                                Plotly.newPlot('chart', ${JSON.stringify(plotData)}, ${JSON.stringify(layout)}, ${JSON.stringify(config)});
+                            }
+                        <\/script>
+                    </body>
+                </html>
+            `);
+            chartWindow.document.close();
+        }
+
+        // Funcție helper pentru actualizarea checkbox-urilor din lista de obiecte
+        function updateObjectVisibilityInList(object) {
+            const objectsList = document.getElementById('objects-list');
+            const items = objectsList.getElementsByClassName('object-list-item');
+            for (let item of items) {
+                const checkbox = item.querySelector('.object-checkbox');
+                const name = item.querySelector('.object-name');
+                if (name.textContent === object.name) {
+                    checkbox.checked = object.visible;
+                }
+            }
+        }
+
+        // Adăugăm funcția render globală
+        function render() {
+            renderer.render(scene, camera);
+        }
+
+        // Adăugăm funcția pentru afișarea tabelului
+        window.showObjectsTable = function() {
+            if (!currentModel) return;
+
+            const allProperties = new Set([
+                'Name', 'Type', 'Volume', 'Area', 'Length', 'Width', 'Height',
+                'Material', 'GUID', 'Mesh ID'
+            ]);
+            const objects = [];
+
+            currentModel.traverse((object) => {
+                if (object.type === 'Mesh' && object.userData) {
+                    const objectData = {
+                        Name: object.name,
+                        Type: object.userData.type || 'Undefined',
+                        GUID: object.userData.guid || 'N/A',
+                        'Mesh ID': object.userData.mesh_id || 'N/A'
+                    };
+
+                    if (object.userData.info) {
+                        Object.entries(object.userData.info).forEach(([key, value]) => {
+                            if (typeof value === 'number') {
+                                objectData[key] = value.toFixed(2);
+                            } 
+                            else if (key === 'material') {
+                                try {
+                                    const materialData = JSON.parse(value);
+                                    objectData['Material'] = materialData.name || 'N/A';
+                                } catch (e) {
+                                    objectData['Material'] = value;
+                                }
+                            }
+                            else {
+                                objectData[key] = value;
+                            }
+                            allProperties.add(key);
+                        });
+
+                        ['volume', 'area', 'length', 'width', 'height'].forEach(prop => {
+                            if (object.userData.info[prop]) {
+                                objectData[prop.charAt(0).toUpperCase() + prop.slice(1)] = 
+                                    parseFloat(object.userData.info[prop]).toFixed(2);
+                            }
+                        });
+                    }
+                    objects.push(objectData);
+                }
+            });
+
+            const sortedProperties = Array.from(allProperties).sort();
+            const columns = sortedProperties.map(prop => ({
+                title: prop,
+                field: prop,
+                sorter: "string",
+                headerFilter: "input",
+                headerFilterPlaceholder: "Filter...",
+                headerSortTristate: true
+            }));
+
+            const tableWindow = window.open('', '_blank', 'width=1200,height=800');
+            tableWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Objects Table</title>
+                        <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator.min.css" rel="stylesheet">
+                        <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"><\/script>
+                        <style>
+                            body { margin: 0; padding: 20px; background: #1e1e1e; font-family: 'Segoe UI', sans-serif; color: #ffffff; }
+                            .tabulator { background-color: #252526; border: 1px solid #404040; }
+                            .tabulator-header { background-color: #333333; border-bottom: 2px solid #404040; }
+                            .tabulator-col { background-color: #333333; color: #4ec9b0; border-right: 1px solid #404040; }
+                            .tabulator-cell { border-right: 1px solid #404040; color: #d4d4d4; }
+                            .tabulator-row { background-color: #252526; border-bottom: 1px solid #404040; }
+                            .tabulator-row:hover { background-color: #2d2d2d !important; }
+                            .tabulator-row.tabulator-row-even { background-color: #2a2a2a; }
+                            .tabulator-header-filter input { background: #333333; border: 1px solid #404040; color: #ffffff; padding: 4px; }
+                            #export-buttons { margin-bottom: 20px; }
+                            .export-button { 
+                                background: #333333; 
+                                color: #ffffff; 
+                                border: 1px solid #404040;
+                                padding: 8px 16px;
+                                margin-right: 10px;
+                                cursor: pointer;
+                                border-radius: 4px;
+                            }
+                            .export-button:hover { background: #404040; }
+                        </style>
+                    </head>
+                    <body>
+                        <div id="export-buttons">
+                            <button class="export-button" onclick="exportCSV()">Export CSV</button>
+                            <button class="export-button" onclick="exportJSON()">Export JSON</button>
+                            <button class="export-button" onclick="exportXLSX()">Export Excel</button>
+                        </div>
+                        <div id="table"></div>
+                        <script>
+                            let table = new Tabulator("#table", {
+                                data: ${JSON.stringify(objects)},
+                                columns: ${JSON.stringify(columns)},
+                                layout: "fitDataFill",
+                                height: "calc(100vh - 100px)",
+                                pagination: true,
+                                paginationSize: 25,
+                                movableColumns: true,
+                                resizableColumns: true,
+                                initialSort: [{column: "Name", dir: "asc"}]
+                            });
+
+                            function exportCSV() {
+                                table.download("csv", "objects_data.csv", {
+                                    delimiter: ",",
+                                    bom: true
+                                });
+                            }
+
+                            function exportJSON() {
+                                table.download("json", "objects_data.json");
+                            }
+
+                            function exportXLSX() {
+                                table.download("xlsx", "objects_data.xlsx", {
+                                    sheetName: "Objects Data"
+                                });
+                            }
+                        <\/script>
+                    </body>
+                </html>
+            `);
+            tableWindow.document.close();
+        };
+
+        function highlightObjectByGuid(guid) {
+            if (!currentModel) return;
+            
+            // Resetăm culoarea tuturor obiectelor
+            currentModel.traverse((child) => {
+                if (child.isMesh && child.material.emissive) {
+                    child.material.emissive.setHex(0x000000);
+                }
+            });
+
+            // Căutăm obiectul cu GUID-ul specificat
+            currentModel.traverse((child) => {
+                if (child.userData && child.userData.guid === guid) {
+                    child.material.emissive.setHex(0x555555);
+                    selectObject(child);
+                }
+            });
+        }
+
+        // Funcție pentru activarea/dezactivarea clipping plane
+        window.toggleClipPlane = function() {
+            clipPlaneEnabled = document.getElementById('clipPlaneToggle').checked;
+            
+            if (currentModel) {
+                currentModel.traverse((node) => {
+                    if (node.isMesh) {
+                        if (clipPlaneEnabled) {
+                            node.material.clippingPlanes = [clipPlane];
+                        } else {
+                            node.material.clippingPlanes = [];
+                        }
+                        node.material.needsUpdate = true;
+                    }
+                });
+            }
+        };
+
+        // Funcție pentru actualizarea poziției clipping plane
+        window.updateClipPlane = function(value) {
+            if (!clipPlaneEnabled) return;
+            
+            // Convertim valoarea în intervalul potrivit pentru model
+            const height = parseFloat(value);
+            clipPlane.constant = height;
+            
+            render();
+        };
+
+        // Adăugăm funcțiile pentru actualizare
+        window.updateClipPlaneFromSlider = function(value) {
+            const numericInput = document.getElementById('clipPlaneHeightInput');
+            numericInput.value = value;
+            updateClipPlane(value);
+        };
+
+        window.updateClipPlaneFromInput = function(value) {
+            const slider = document.getElementById('clipPlaneHeight');
+            slider.value = value;
+            updateClipPlane(value);
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const openCsvButton = document.getElementById('openCsvViewer');
+            if (openCsvButton) {
+                openCsvButton.addEventListener('click', function() {
+                    window.open('/csv-viewer', '_blank', 'width=1200,height=800');
+                });
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const csvInput = document.getElementById('csv-input');
+            csvInput.addEventListener('change', handleCsvFiles);
+
+            function handleCsvFiles(event) {
+                const files = event.target.files;
+                Array.from(files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const text = e.target.result;
+                        displayCsvTable(file.name, text);
+                    };
+                    reader.readAsText(file);
+                });
+            }
+
+            function displayCsvTable(fileName, csvText) {
+                const lines = csvText.split('\n');
+                const headers = lines[0].split(',').map(header => header.trim());
+                const data = lines.slice(1).map(line => line.split(',').map(value => value.trim()));
+
+                const tableContainer = document.createElement('div');
+                tableContainer.className = 'table-container';
+
+                const table = document.createElement('table');
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+                headers.forEach(header => {
+                    const th = document.createElement('th');
+                    th.textContent = header;
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+
+                const tbody = document.createElement('tbody');
+                data.forEach(row => {
+                    const tr = document.createElement('tr');
+                    row.forEach(value => {
+                        const td = document.createElement('td');
+                        td.textContent = value;
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+                table.appendChild(tbody);
+                tableContainer.appendChild(table);
+
+                document.body.appendChild(tableContainer);
+            }
+        });
+
+        let filesData = new Map();
+
+        /**
+         * Processes CSV files and creates data visualizations
+         * @param {FileList} files - The uploaded CSV files
+         */
+        function handleCsvFiles(event) {
+            const files = event.target.files;
+            if (!files.length) return;
+            
+            filesData.clear();
+            
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const text = e.target.result;
+                    const fileName = file.name;
+                    processData(fileName, text);
+                    
+                    // Actualizăm graficele după ce toate fișierele sunt procesate
+                    if (filesData.size === files.length) {
+                        createPlotlyCharts();
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        function processData(fileName, csv) {
+            const lines = csv.split('\n');
+            const headers = lines[0].split(',').map(header => header.trim());
+            
+            const data = lines.slice(1)
+                .filter(line => line.trim())
+                .map(line => {
+                    const values = line.split(',');
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index]?.trim();
+                    });
+                    return row;
+                });
+
+            filesData.set(fileName, { headers, data });
+        }
+
+        function createPlotlyCharts() {
+            // Colectăm toate denumirile unice pentru a compara valorile
+            const allDenumiri = new Set();
+            filesData.forEach(fileInfo => {
+                fileInfo.data.forEach(row => {
+                    if (row.denumire) {
+                        allDenumiri.add(row.denumire);
+                    }
+                });
+            });
+
+            // Pregătim datele pentru grafic
+            const traces = [];
+            filesData.forEach((fileInfo, fileName) => {
+                const lastHeader = fileInfo.headers[fileInfo.headers.length - 1];
+                
+                // Creăm un obiect pentru maparea denumire -> valoare
+                const valueMap = new Map();
+                fileInfo.data.forEach(row => {
+                    valueMap.set(row.denumire, parseFloat(row[lastHeader]) || 0);
+                });
+
+                // Pregătim datele pentru acest fișier
+                const trace = {
+                    name: fileName,
+                    x: Array.from(allDenumiri),
+                    y: Array.from(allDenumiri).map(denumire => valueMap.get(denumire) || 0),
+                    type: 'bar'
+                };
+                traces.push(trace);
+            });
+
+            const layout = {
+                title: 'Comparație Valori între Fișiere',
+                barmode: 'group',
+                paper_bgcolor: '#252526',
+                plot_bgcolor: '#1e1e1e',
+                font: {
+                    color: '#ffffff'
+                },
+                xaxis: {
+                    title: 'Denumire',
+                    gridcolor: '#404040',
+                    tickfont: {
+                        color: '#ffffff'
+                    }
+                },
+                yaxis: {
+                    title: 'Valoare',
+                    gridcolor: '#404040',
+                    tickfont: {
+                        color: '#ffffff'
+                    }
+                },
+                showlegend: true,
+                legend: {
+                    font: {
+                        color: '#ffffff'
+                    }
+                },
+                margin: {
+                    l: 50,
+                    r: 50,
+                    t: 50,
+                    b: 100
+                }
+            };
+
+            const config = {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false
+            };
+
+            // Creăm div-ul pentru grafic dacă nu există
+            let chartDiv = document.getElementById('plotlyChart');
+            if (!chartDiv) {
+                chartDiv = document.createElement('div');
+                chartDiv.id = 'plotlyChart';
+                document.querySelector('.charts-container').appendChild(chartDiv);
+            }
+
+            // Generăm graficul
+            Plotly.newPlot('plotlyChart', traces, layout, config);
+        }
+
+        // Adăugăm event listener pentru input-ul de fișiere
+        document.addEventListener('DOMContentLoaded', function() {
+            const csvInput = document.getElementById('csvFileInput');
+            if (csvInput) {
+                csvInput.addEventListener('change', handleCsvFiles);
+            }
+        });
+
+        // Adăugăm funcția pentru deschiderea CSV Viewer-ului
+        window.openCsvViewer = function() {
+            window.open('/csv-viewer', '_blank', 'width=1200,height=800');
+        };
+    </script>
+
+    <!-- Adăugăm modal-ul pentru grafice -->
+    <div id="chartsModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeCharts()">&times;</span>
+            <h2 style="color: #89d0ff; margin-bottom: 20px;">Analytics Dashboard</h2>
+            <div class="chart-container">
+                <div id="volumeChart"></div>
+                <div id="materialChart"></div>
+                <div id="categoryChart"></div>
+                <div id="objectTypesChart"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Adăugăm div-ul pentru label -->
+    <div id="object-label" class="object-label"></div>
+</body>
+</html>

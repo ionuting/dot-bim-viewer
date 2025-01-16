@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Viewer - Editabil</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #ffffff;
+        }
+
+        h1 {
+            color: #4ec9b0;
+            margin-bottom: 30px;
+        }
+
+        .file-input {
+            margin: 20px 0;
+            padding: 10px;
+            background: #333333;
+            border: none;
+            color: #ffffff;
+            border-radius: 4px;
+            width: 100%;
+        }
+
+        .table-container {
+            margin: 20px 0;
+            overflow-x: auto;
+            background: #252526;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        th, td {
+            border: 1px solid #404040;
+            padding: 8px;
+            text-align: left;
+            color: #d4d4d4;
+        }
+
+        th {
+            background-color: #333333;
+            color: #4ec9b0;
+        }
+
+        .chart-container {
+            margin: 20px 0;
+            height: 400px;
+            background: #252526;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .file-section {
+            border: 1px solid #404040;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            background: #252526;
+        }
+
+        .editable {
+            background-color: #333333;
+            border: 1px solid #404040;
+            color: #ffffff;
+            width: 100%;
+            padding: 4px;
+            box-sizing: border-box;
+            border-radius: 3px;
+        }
+
+        .editable:focus {
+            outline: 2px solid #4ec9b0;
+            background-color: #3c3c3c;
+        }
+
+        .editable:hover:not(:focus) {
+            background-color: #2d2d2d;
+        }
+
+        .save-button {
+            background-color: #4ec9b0;
+            color: #1e1e1e;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .save-button:hover {
+            background-color: #3da892;
+        }
+
+        .file-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #2d2d2d;
+            border-radius: 4px;
+        }
+
+        h3 {
+            color: #4ec9b0;
+            margin: 0;
+        }
+
+        /* Stiluri pentru scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4ec9b0;
+        }
+
+        /* Stiluri pentru grafice */
+        canvas {
+            background: #252526;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSV Viewer - Editabil</h1>
+    <input type="file" id="csvFile" accept=".csv" multiple class="file-input">
+    <div id="fileContainers"></div>
+    <div class="chart-container">
+        <canvas id="myChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <canvas id="comparisonChart"></canvas>
+    </div>
+
+    <script>
+        let filesData = new Map();
+        let chart = null;
+
+        document.getElementById('csvFile').addEventListener('change', handleFiles);
+
+        function handleFiles(event) {
+            const files = event.target.files;
+            filesData.clear();
+            
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const text = e.target.result;
+                    processData(file.name, text);
+                };
+                
+                reader.readAsText(file);
+            });
+        }
+
+        function processData(fileName, csv) {
+            const lines = csv.split('\n');
+            const headers = lines[0].split(',').map(header => header.trim());
+            
+            const data = lines.slice(1)
+                .map(line => {
+                    const values = line.split(',');
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index]?.trim();
+                    });
+                    return row;
+                })
+                .filter(row => Object.values(row).some(value => value));
+
+            filesData.set(fileName, { headers, data });
+            
+            updateUI();
+            updateChart();
+        }
+
+        function handleCellEdit(fileName, rowIndex, header, value) {
+            const fileInfo = filesData.get(fileName);
+            if (fileInfo) {
+                fileInfo.data[rowIndex][header] = value;
+                updateChart();
+            }
+        }
+
+        function downloadCSV(fileName) {
+            const fileInfo = filesData.get(fileName);
+            if (!fileInfo) return;
+
+            const headers = fileInfo.headers;
+            const rows = [headers.join(',')];
+
+            fileInfo.data.forEach(row => {
+                const values = headers.map(header => row[header] || '');
+                rows.push(values.join(','));
+            });
+
+            const csvContent = rows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `updated_${fileName}`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        function updateUI() {
+            const container = document.getElementById('fileContainers');
+            container.innerHTML = '';
+            
+            filesData.forEach((fileInfo, fileName) => {
+                const section = document.createElement('div');
+                section.className = 'file-section';
+                
+                const fileActions = document.createElement('div');
+                fileActions.className = 'file-actions';
+
+                const title = document.createElement('h3');
+                title.textContent = fileName;
+                fileActions.appendChild(title);
+
+                const saveButton = document.createElement('button');
+                saveButton.textContent = 'Salvează CSV';
+                saveButton.className = 'save-button';
+                saveButton.onclick = () => downloadCSV(fileName);
+                fileActions.appendChild(saveButton);
+
+                section.appendChild(fileActions);
+                
+                const tableContainer = document.createElement('div');
+                tableContainer.className = 'table-container';
+                
+                const table = document.createElement('table');
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+                
+                fileInfo.headers.forEach(header => {
+                    const th = document.createElement('th');
+                    th.textContent = header;
+                    headerRow.appendChild(th);
+                });
+                
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+                
+                const tbody = document.createElement('tbody');
+                fileInfo.data.forEach((row, rowIndex) => {
+                    const tr = document.createElement('tr');
+                    fileInfo.headers.forEach(header => {
+                        const td = document.createElement('td');
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.value = row[header] || '';
+                        input.className = 'editable';
+                        input.addEventListener('input', (e) => {
+                            handleCellEdit(fileName, rowIndex, header, e.target.value);
+                        });
+                        td.appendChild(input);
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+                
+                table.appendChild(tbody);
+                tableContainer.appendChild(table);
+                section.appendChild(tableContainer);
+                container.appendChild(section);
+            });
+        }
+
+        function updateChart() {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            
+            if (chart) {
+                chart.destroy();
+            }
+
+            if (filesData.size === 0) return;
+
+            const firstFileHeaders = [...filesData.values()][0].headers;
+            const lastHeader = firstFileHeaders[firstFileHeaders.length - 1];
+
+            const datasets = [];
+            const labels = [];
+            const maxRows = Math.max(...[...filesData.values()].map(file => file.data.length));
+
+            for (let i = 0; i < maxRows; i++) {
+                labels.push(`Rând ${i + 1}`);
+            }
+
+            const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#a4de6c'];
+            let colorIndex = 0;
+
+            filesData.forEach((fileInfo, fileName) => {
+                const dataset = {
+                    label: fileName,
+                    data: Array(maxRows).fill(null),
+                    backgroundColor: colors[colorIndex % colors.length],
+                };
+
+                fileInfo.data.forEach((row, index) => {
+                    dataset.data[index] = parseFloat(row[lastHeader]) || 0;
+                });
+
+                datasets.push(dataset);
+                colorIndex++;
+            });
+
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 500
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: lastHeader
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Rânduri'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function generateComparativeCharts() {
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            const datasets = [];
+            const labels = new Set();
+
+            filesData.forEach((fileInfo, fileName) => {
+                const data = fileInfo.data.map(row => parseFloat(row['pret unitar']) || 0);
+                const itemLabels = fileInfo.data.map(row => row['denumire']);
+                itemLabels.forEach(label => labels.add(label));
+
+                datasets.push({
+                    label: fileName,
+                    data: data,
+                    backgroundColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.5)`
+                });
+            });
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Array.from(labels),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Comparative Chart of Prices'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Price'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Denumire'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Call this function after loading the CSV files
+        document.getElementById('csvFile').addEventListener('change', function() {
+            handleFiles(event);
+            generateComparativeCharts();
+        });
+    </script>
+</body>
+</html>

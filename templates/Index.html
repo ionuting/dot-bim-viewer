@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>CAD Web Simplu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        canvas { border: 2px solid #2c3e50; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-6">
+        <h1 class="text-3xl font-bold text-center mb-6">Aplicație CAD Web</h1>
+        
+        <div class="flex justify-center space-x-4 mb-6">
+            <button id="polylineBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                Desen Poliлinie
+            </button>
+            <button id="rectangleBtn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                Desen Dreptunghi
+            </button>
+            <button id="saveBtn" class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
+                Salvează Desen
+            </button>
+        </div>
+
+        <div class="flex justify-center">
+            <canvas id="drawCanvas" width="800" height="600" class="bg-white shadow-lg"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawCanvas');
+        const ctx = canvas.getContext('2d');
+        let points = [];
+        let isDrawing = false;
+        let currentMode = null;
+
+        function drawPoint(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+        }
+
+        function redrawPolyline() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            points.forEach((point, index) => {
+                if (index === 0) {
+                    ctx.moveTo(point[0], point[1]);
+                } else {
+                    ctx.lineTo(point[0], point[1]);
+                }
+                drawPoint(point[0], point[1]);
+            });
+            ctx.strokeStyle = 'blue';
+            ctx.stroke();
+        }
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        document.getElementById('polylineBtn').addEventListener('click', () => {
+            currentMode = 'polyline';
+            points = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        document.getElementById('rectangleBtn').addEventListener('click', () => {
+            currentMode = 'rectangle';
+            points = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        document.getElementById('saveBtn').addEventListener('click', saveDrawing);
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            points.push([x, y]);
+            redrawPolyline();
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (currentMode === 'polyline') {
+                points.push([x, y]);
+                redrawPolyline();
+            } else if (currentMode === 'rectangle' && points.length === 1) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeRect(points[0][0], points[0][1], x - points[0][0], y - points[0][1]);
+            }
+        }
+
+        function stopDrawing() {
+            if (isDrawing) {
+                isDrawing = false;
+                if (currentMode === 'polyline') {
+                    fetch('/add_polyline', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ points: points })
+                    });
+                } else if (currentMode === 'rectangle' && points.length === 2) {
+                    fetch('/add_rectangle', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            start: points[0], 
+                            end: points[1] 
+                        })
+                    });
+                }
+            }
+        }
+
+        function saveDrawing() {
+            fetch('/save_drawing', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    window.location.href = `/download/${data.filename}`;
+                });
+        }
+    </script>
+</body>
+</html>

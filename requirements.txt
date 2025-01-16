@@ -1,0 +1,25 @@
+# Web Framework
+Flask>=2.0.0
+
+# File System Operations
+pathlib>=1.0.1
+
+# Data Processing
+pandas>=1.3.0
+numpy>=1.21.0
+
+# 3D Graphics and Visualization
+plotly>=5.3.0
+
+# Development & Debug Tools
+python-dotenv>=0.19.0
+Flask-DebugToolbar>=0.13.1
+
+# Security
+Flask-Talisman>=1.0.0
+Flask-SeaSurf>=1.1.1
+
+# Optional - Development Only
+pytest>=6.2.5
+black>=21.5b2
+flake8>=3.9.2 
