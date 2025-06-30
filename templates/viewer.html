@@ -6,6 +6,75 @@
     <!-- Plotly -->
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
+        /* Stiluri pentru acordeon */
+        .accordion-header {
+            display: flex;
+            align-items: center;
+            background: #333333;
+            padding: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #89d0ff;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .accordion-header:hover {
+            background: #404040;
+        }
+
+        .accordion-header input[type="checkbox"] {
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        /* Păstrăm stilurile existente pentru restul elementelor */
+        .accordion-content {
+            display: none;
+            padding-left: 10px;
+        }
+
+        .accordion-content.open {
+            display: block;
+        }
+
+        .accordion-subheader {
+            background: #2d2d2d;
+            padding: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #4ec9b0;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            margin-left: 10px;
+            transition: background-color 0.2s;
+        }
+
+        .accordion-subheader:hover {
+            background: #383838;
+        }
+
+        .object-list-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background: #333333;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            margin-left: 20px;
+            transition: background-color 0.2s;
+        }
+
+        .object-list-item:hover {
+            background: #404040;
+        }
+
+        .object-list-item.selected {
+            border-left: 3px solid #4ec9b0;
+            padding-left: 5px;
+        }
         body { 
             margin: 0; 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -951,34 +1020,169 @@
 
             if (!currentModel) return;
 
+            // Grupăm elementele după BuildingStorey și ifcType
+            const groupedObjects = {};
             currentModel.traverse((object) => {
-                if (object.type === 'Mesh') {
-                    const item = document.createElement('div');
-                    item.className = 'object-list-item';
-                    if (selectedObject === object) {
-                        item.classList.add('selected');
+                if (object.type === 'Mesh' && object.userData && object.userData.info) {
+                    const buildingStory = object.userData.info.Pset_SpatialData?.BuildingStory || 'Unassigned';
+                    const ifcType = object.userData.info.ifcType || 'Unknown';
+                    
+                    if (!groupedObjects[buildingStory]) {
+                        groupedObjects[buildingStory] = {};
                     }
-
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.className = 'object-checkbox';
-                    checkbox.checked = object.visible;
-                    checkbox.addEventListener('change', () => {
-                        object.visible = checkbox.checked;
-                    });
-
-                    const name = document.createElement('span');
-                    name.className = 'object-name';
-                    name.textContent = object.name;
-                    name.addEventListener('click', () => {
-                        selectObject(object);
-                    });
-
-                    item.appendChild(checkbox);
-                    item.appendChild(name);
-                    objectsList.appendChild(item);
+                    if (!groupedObjects[buildingStory][ifcType]) {
+                        groupedObjects[buildingStory][ifcType] = [];
+                    }
+                    groupedObjects[buildingStory][ifcType].push(object);
                 }
             });
+
+            // Creăm structura acordeon
+            Object.keys(groupedObjects).sort().forEach((buildingStory) => {
+                // Creăm header-ul pentru BuildingStorey
+                const storyDiv = document.createElement('div');
+                storyDiv.className = 'accordion-item';
+                
+                const storyHeader = document.createElement('div');
+                storyHeader.className = 'accordion-header';
+                
+                // Adăugăm checkbox pentru BuildingStorey
+                const storyCheckbox = document.createElement('input');
+                storyCheckbox.type = 'checkbox';
+                storyCheckbox.className = 'story-checkbox';
+                storyCheckbox.addEventListener('change', () => {
+                    const isChecked = storyCheckbox.checked;
+                    // Actualizăm vizibilitatea tuturor obiectelor din acest BuildingStorey
+                    Object.values(groupedObjects[buildingStory]).flat().forEach((object) => {
+                        object.visible = isChecked;
+                        updateObjectVisibilityInList(object);
+                    });
+                    updateStoryCheckboxState(buildingStory);
+                });
+                
+                const storyLabel = document.createElement('span');
+                storyLabel.textContent = `Building Storey: ${buildingStory}`;
+                
+                storyHeader.appendChild(storyCheckbox);
+                storyHeader.appendChild(storyLabel);
+                
+                const storyContent = document.createElement('div');
+                storyContent.className = 'accordion-content';
+                
+                // Creăm sub-acordeon pentru fiecare ifcType
+                Object.keys(groupedObjects[buildingStory]).sort().forEach((ifcType) => {
+                    const typeDiv = document.createElement('div');
+                    typeDiv.className = 'accordion-subitem';
+                    
+                    const typeHeader = document.createElement('div');
+                    typeHeader.className = 'accordion-subheader';
+                    typeHeader.textContent = `Type: ${ifcType}`;
+                    
+                    const typeContent = document.createElement('div');
+                    typeContent.className = 'accordion-content';
+                    
+                    // Adăugăm elementele individuale
+                    groupedObjects[buildingStory][ifcType].forEach((object) => {
+                        const item = document.createElement('div');
+                        item.className = 'object-list-item';
+                        if (selectedObject === object) {
+                            item.classList.add('selected');
+                        }
+
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.className = 'object-checkbox';
+                        checkbox.checked = object.visible;
+                        checkbox.addEventListener('change', () => {
+                            object.visible = checkbox.checked;
+                            updateObjectVisibilityInList(object);
+                            updateStoryCheckboxState(buildingStory);
+                        });
+
+                        const name = document.createElement('span');
+                        name.className = 'object-name';
+                        name.textContent = object.name;
+                        name.addEventListener('click', () => {
+                            selectObject(object);
+                        });
+
+                        item.appendChild(checkbox);
+                        item.appendChild(name);
+                        typeContent.appendChild(item);
+                    });
+                    
+                    typeDiv.appendChild(typeHeader);
+                    typeDiv.appendChild(typeContent);
+                    storyContent.appendChild(typeDiv);
+                });
+                
+                storyDiv.appendChild(storyHeader);
+                storyDiv.appendChild(storyContent);
+                objectsList.appendChild(storyDiv);
+
+                // Actualizăm starea checkbox-ului etajului
+                updateStoryCheckboxState(buildingStory);
+            });
+
+            // Adăugăm event listener-i pentru a gestiona deschiderea/închiderea acordeonului
+            const headers = document.querySelectorAll('.accordion-header, .accordion-subheader');
+            headers.forEach(header => {
+                header.addEventListener('click', (event) => {
+                    // Ignorăm click-ul pe checkbox pentru a nu afecta acordeonul
+                    if (event.target.type !== 'checkbox') {
+                        const content = header.nextElementSibling;
+                        const isOpen = content.classList.contains('open');
+                        
+                        // Închidem toate secțiunile din același nivel
+                        const parent = header.parentElement.parentElement;
+                        const siblingContents = parent.querySelectorAll('.accordion-content.open');
+                        siblingContents.forEach(sibling => {
+                            if (sibling !== content) {
+                                sibling.classList.remove('open');
+                            }
+                        });
+                        
+                        // Deschidem/închidem secțiunea curentă
+                        content.classList.toggle('open', !isOpen);
+                    }
+                });
+            });
+        }
+
+        // Funcție pentru actualizarea stării checkbox-ului etajului
+        function updateStoryCheckboxState(buildingStory) {
+            const storyHeader = Array.from(document.querySelectorAll('.accordion-header')).find(
+                header => header.textContent.includes(`Building Storey: ${buildingStory}`)
+            );
+            if (!storyHeader) return;
+
+            const storyCheckbox = storyHeader.querySelector('.story-checkbox');
+            const objects = Array.from(document.querySelectorAll(`.accordion-item .object-list-item`))
+                .filter(item => item.closest('.accordion-item').querySelector('.accordion-header').textContent.includes(buildingStory))
+                .map(item => item.querySelector('.object-checkbox'));
+
+            const allChecked = objects.every(checkbox => checkbox.checked);
+            const noneChecked = objects.every(checkbox => !checkbox.checked);
+            
+            storyCheckbox.checked = allChecked;
+            storyCheckbox.indeterminate = !allChecked && !noneChecked;
+        }
+
+        // Actualizăm funcția updateObjectVisibilityInList pentru a sincroniza checkbox-ul etajului
+        function updateObjectVisibilityInList(object) {
+            const objectsList = document.getElementById('objects-list');
+            const items = objectsList.getElementsByClassName('object-list-item');
+            for (let item of items) {
+                const name = item.querySelector('.object-name');
+                if (name.textContent === object.name) {
+                    const checkbox = item.querySelector('.object-checkbox');
+                    checkbox.checked = object.visible;
+                    
+                    // Actualizăm starea checkbox-ului etajului
+                    const buildingStory = object.userData.info.Pset_SpatialData?.BuildingStory || 'Unassigned';
+                    updateStoryCheckboxState(buildingStory);
+                }
+            }
         }
 
         // Funcție pentru actualizarea poziției label-ului
@@ -1019,15 +1223,32 @@
             if (!object || !object.userData) return;
             
             const info = object.userData.info;
-            labelDiv.innerHTML = `
+            let labelContent = `
                 <div class="label-title">${object.name}</div>
-                <div class="label-property">Type: ${info.type || 'N/A'}</div>
-                <div class="label-property">Length: ${info.length || 'N/A'} m</div>
-                <div class="label-property">Width: ${info.width || 'N/A'} m</div>
-                <div class="label-property">Height: ${info.height || 'N/A'} m</div>
-                <div class="label-property">Area: ${info.area || 'N/A'} m²</div>
-                <div class="label-property">Volume: ${info.volume || 'N/A'} m³</div>
+                <div class="label-property">Type: ${info.ifcType || 'N/A'}</div>
+                <div class="label-property">GUID: ${object.userData.guid || 'N/A'}</div>
             `;
+            
+            // Afișăm toate proprietățile din info, cu excepția celor de control
+            const excludeProps = ['GlobalId', 'ifcType', 'ifcName', 'PropertySets', 'SpatialContainer', 'Pset_SpatialData', 'AggregatedBy', 'material'];
+            Object.entries(info).forEach(([key, value]) => {
+                if (!excludeProps.includes(key) && value !== 'N/A') {
+                    // Adăugăm unități pentru proprietățile geometrice
+                    let unit = '';
+                    if (key.toLowerCase().includes('area')) {
+                        unit = 'm²';
+                    } else if (key.toLowerCase().includes('volume')) {
+                        unit = 'm³';
+                    } else if (['Length', 'Width', 'Height'].includes(key)) {
+                        unit = 'm';
+                    }
+                    // Formatarea valorii
+                    const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
+                    labelContent += `<div class="label-property">${key}: ${displayValue}${unit ? ' ' + unit : ''}</div>`;
+                }
+            });
+            
+            labelDiv.innerHTML = labelContent;
             labelDiv.style.display = 'block';
             labelVisible = true;
         }
@@ -1187,18 +1408,6 @@
             chartWindow.document.close();
         }
 
-        // Funcție helper pentru actualizarea checkbox-urilor din lista de obiecte
-        function updateObjectVisibilityInList(object) {
-            const objectsList = document.getElementById('objects-list');
-            const items = objectsList.getElementsByClassName('object-list-item');
-            for (let item of items) {
-                const checkbox = item.querySelector('.object-checkbox');
-                const name = item.querySelector('.object-name');
-                if (name.textContent === object.name) {
-                    checkbox.checked = object.visible;
-                }
-            }
-        }
 
         // Adăugăm funcția render globală
         function render() {
